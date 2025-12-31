@@ -57,95 +57,141 @@ export class CapCutService {
  * - Works for Puppeteer Page
  */
 static async fillBirthday(page) {
-  const {
-    BIRTHDAY_INPUT,
-    BIRTHDAY_MONTH_SELECTOR,
-    BIRTHDAY_DAY_SELECTOR,
-    BIRTHDAY_NEXT_BUTTON,
-    DROPDOWN_ITEMS
-  } = CONFIG.CAPCUT.SELECTORS;
+  const timeout = CONFIG.TIMING.SELECTOR_TIMEOUT ?? 15000;
+
+  // Kandidat selector yang biasanya lebih stabil dibanding class random
+  // Kamu bisa tambah/kurangi setelah inspect DOM terbaru.
+  const birthdayInputCandidates = [
+    'input[name*="birth" i]',
+    'input[id*="birth" i]',
+    'input[aria-label*="birth" i]',
+    'input[placeholder*="birth" i]',
+    'input[aria-label*="tanggal" i]',
+    'input[placeholder*="tanggal" i]',
+    'input[type="date"]',
+    '[data-testid*="birth" i] input',
+    '[data-e2e*="birth" i] input',
+    // fallback terakhir: apapun yg ada "birth" di class
+    '[class*="birth" i] input'
+  ];
+
+  const monthTriggerCandidates = [
+    '[data-testid*="month" i]',
+    '[aria-label*="month" i]',
+    '[aria-label*="bulan" i]',
+    '[class*="month" i]'
+  ];
+
+  const dayTriggerCandidates = [
+    '[data-testid*="day" i]',
+    '[aria-label*="day" i]',
+    '[aria-label*="hari" i]',
+    '[class*="day" i]'
+  ];
+
+  const nextBtnCandidates = [
+    'button[type="submit"]',
+    'button:has-text("Next")',
+    'button:has-text("Lanjut")',
+    '[data-testid*="next" i]',
+    '[class*="next" i] button, button[class*="next" i]'
+  ];
+
+  const dropdownItemCandidates = [
+    '.lv-select-popup li',
+    '[role="option"]',
+    'li[role="option"]',
+    'ul li'
+  ];
 
   const birthday = generateRandomBirthday();
 
   try {
-    // Pastikan UI sudah stabil
     await page.waitForTimeout(800);
 
-    // ===============================
-    // 1. Tunggu & klik birthday input (open picker)
-    // ===============================
-    await page.waitForSelector(BIRTHDAY_INPUT, {
-      visible: true,
-      timeout: CONFIG.TIMING.SELECTOR_TIMEOUT
-    });
+    // 1) Cari birthday input (page atau iframe)
+    const { ctx, selector: birthdaySel } =
+      await findSelectorInPageOrFrames(page, birthdayInputCandidates, timeout);
 
-    await page.evaluate((sel) => {
-      document.querySelector(sel)?.scrollIntoView({ block: 'center' });
-    }, BIRTHDAY_INPUT);
+    // Pastikan terlihat
+    await ctx.waitForSelector(birthdaySel, { visible: true, timeout });
+    await ctx.evaluate((sel) => document.querySelector(sel)?.scrollIntoView({ block: "center" }), birthdaySel);
 
-    await page.click(BIRTHDAY_INPUT, { delay: 100 });
+    // Klik untuk membuka picker
+    await ctx.click(birthdaySel, { delay: 80 });
+    await page.waitForTimeout(300);
 
-    // ===============================
-    // 2. Pilih TAHUN (langsung dari popup)
-    // ===============================
-    await page.waitForSelector(DROPDOWN_ITEMS, { visible: true });
+    // Helper pilih item berdasarkan text dari dropdown umum
+    async function pickByText(text) {
+      // tunggu ada item muncul
+      let itemsSel = null;
+      for (const cand of dropdownItemCandidates) {
+        const h = await ctx.$(cand);
+        if (h) { itemsSel = cand; break; }
+      }
+      if (!itemsSel) {
+        // tunggu sebentar dan coba lagi
+        await page.waitForTimeout(400);
+        for (const cand of dropdownItemCandidates) {
+          const h = await ctx.$(cand);
+          if (h) { itemsSel = cand; break; }
+        }
+      }
+      if (!itemsSel) throw new Error("Dropdown items tidak ditemukan");
 
-    await page.evaluate((year) => {
-      const items = [...document.querySelectorAll('.lv-select-popup li')];
-      const target = items.find(el => el.textContent.trim() === String(year));
-      if (!target) throw new Error('Year option not found');
-      target.click();
-    }, birthday.year);
+      const ok = await ctx.evaluate((sel, t) => {
+        const wanted = String(t).trim().toLowerCase();
+        const items = [...document.querySelectorAll(sel)];
+        const target =
+          items.find(el => (el.textContent || "").trim().toLowerCase() === wanted) ||
+          items.find(el => (el.textContent || "").trim().toLowerCase().includes(wanted));
+        if (target) { target.click(); return true; }
+        return false;
+      }, itemsSel, text);
 
-    await page.waitForTimeout(CONFIG.TIMING.PAGE_WAIT);
+      if (!ok) throw new Error(`Item dropdown tidak ditemukan untuk: ${text}`);
+    }
 
-    // ===============================
-    // 3. Pilih BULAN
-    // ===============================
-    await page.click(BIRTHDAY_MONTH_SELECTOR, { delay: 80 });
-    await page.waitForSelector(DROPDOWN_ITEMS, { visible: true });
+    // 2) Pilih tahun (banyak picker langsung buka tahun dulu)
+    await pickByText(birthday.year);
+    await page.waitForTimeout(CONFIG.TIMING.PAGE_WAIT ?? 400);
 
-    await page.evaluate((month) => {
-      const items = [...document.querySelectorAll('.lv-select-popup li')];
-      const target = items.find(el =>
-        el.textContent.trim().toLowerCase() === month.toLowerCase()
-      );
-      if (!target) throw new Error('Month option not found');
-      target.click();
-    }, birthday.month);
+    // 3) Pilih bulan (klik trigger bulan kalau ada)
+    try {
+      const { selector: monthSel } =
+        await findSelectorInPageOrFrames(page, monthTriggerCandidates, 2500);
+      await ctx.click(monthSel, { delay: 50 });
+      await page.waitForTimeout(200);
+    } catch (_) {
+      // kalau tidak ada trigger bulan, abaikan
+    }
+    await pickByText(birthday.month);
+    await page.waitForTimeout(CONFIG.TIMING.PAGE_WAIT ?? 400);
 
-    await page.waitForTimeout(CONFIG.TIMING.PAGE_WAIT);
+    // 4) Pilih hari
+    try {
+      const { selector: daySel } =
+        await findSelectorInPageOrFrames(page, dayTriggerCandidates, 2500);
+      await ctx.click(daySel, { delay: 50 });
+      await page.waitForTimeout(200);
+    } catch (_) {}
+    await pickByText(birthday.day);
 
-    // ===============================
-    // 4. Pilih HARI
-    // ===============================
-    await page.click(BIRTHDAY_DAY_SELECTOR, { delay: 80 });
-    await page.waitForSelector(DROPDOWN_ITEMS, { visible: true });
+    console.log(`📆 Birthday dipilih: ${birthday.day} ${birthday.month} ${birthday.year}`);
 
-    await page.evaluate((day) => {
-      const items = [...document.querySelectorAll('.lv-select-popup li')];
-      const target = items.find(el => el.textContent.trim() === String(day));
-      if (!target) throw new Error('Day option not found');
-      target.click();
-    }, birthday.day);
-
-    console.log(
-      `📆 Birthday dipilih: ${birthday.day} ${birthday.month} ${birthday.year}`
-    );
-
-    // ===============================
-    // 5. Klik tombol Next
-    // ===============================
-    await page.waitForSelector(BIRTHDAY_NEXT_BUTTON, { visible: true });
-    await page.click(BIRTHDAY_NEXT_BUTTON, { delay: 100 });
+    // 5) Klik Next
+    const { ctx: nextCtx, selector: nextSel } =
+      await findSelectorInPageOrFrames(page, nextBtnCandidates, timeout);
+    await nextCtx.waitForSelector(nextSel, { visible: true, timeout });
+    await nextCtx.click(nextSel, { delay: 80 });
 
     return birthday;
-
-  } catch (error) {
-    console.error('❌ Gagal mengisi birthday:', error.message);
-    throw error;
+  } catch (err) {
+    console.error("❌ Gagal mengisi tanggal lahir:", err.message);
+    throw err;
   }
 }
+
 
 
   /**
@@ -230,3 +276,4 @@ static async fillBirthday(page) {
     }
   }
 }
+
