@@ -61,192 +61,88 @@ static async fillBirthday(page) {
     BIRTHDAY_INPUT,
     BIRTHDAY_MONTH_SELECTOR,
     BIRTHDAY_DAY_SELECTOR,
-    BIRTHDAY_NEXT_BUTTON
+    BIRTHDAY_NEXT_BUTTON,
+    DROPDOWN_ITEMS
   } = CONFIG.CAPCUT.SELECTORS;
-
-  const timeout = CONFIG.TIMING.SELECTOR_TIMEOUT ?? 20000;
-  const typingDelay = CONFIG.TIMING.TYPING_DELAY ?? 30;
 
   const birthday = generateRandomBirthday();
 
-  // Helper: find a frame that contains selector (or null for main page)
-  async function getContextWithSelector(sel) {
-    // Try main page first
-    const inMain = await page.$(sel);
-    if (inMain) return { ctx: page, isFrame: false };
-
-    // Try frames
-    for (const fr of page.frames()) {
-      try {
-        const h = await fr.$(sel);
-        if (h) return { ctx: fr, isFrame: true };
-      } catch (_) {}
-    }
-    return { ctx: page, isFrame: false }; // fallback
-  }
-
-  // Helper: wait until element exists and is visible-ish & has size
-  async function waitInteractable(ctx, sel) {
-    await ctx.waitForFunction(
-      (s) => {
-        const el = document.querySelector(s);
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        const st = window.getComputedStyle(el);
-        const visible =
-          r.width > 0 &&
-          r.height > 0 &&
-          st.display !== "none" &&
-          st.visibility !== "hidden" &&
-          st.opacity !== "0";
-        return visible;
-      },
-      { timeout },
-      sel
-    );
-  }
-
-  // Helper: scroll and click safely
-  async function scrollAndClick(ctx, sel) {
-    try {
-      // puppeteer Page supports $eval; Frame supports evaluate + querySelector too
-      if (ctx.$eval) {
-        await ctx.$eval(sel, (el) => el.scrollIntoView({ block: "center", inline: "center" }));
-      } else {
-        await ctx.evaluate((s) => {
-          const el = document.querySelector(s);
-          el?.scrollIntoView({ block: "center", inline: "center" });
-        }, sel);
-      }
-    } catch (_) {}
-
-    await ctx.click(sel, { delay: 50 });
-  }
-
-  // Helper: select dropdown item by visible text (works for many custom lists)
-  async function clickItemByText(ctx, text) {
-    const wanted = String(text).trim();
-
-    // Wait some options to appear (generic)
-    await ctx.waitForFunction(() => {
-      const els = document.querySelectorAll('[role="option"], li, [data-value], button');
-      return els && els.length > 0;
-    }, { timeout });
-
-    const clicked = await ctx.evaluate((t) => {
-      const candidates = [
-        ...document.querySelectorAll('[role="option"], li, [data-value], button, div')
-      ];
-
-      // Try exact match by text
-      let el =
-        candidates.find(e => (e.textContent || "").trim() === t) ||
-        candidates.find(e => (e.getAttribute("data-value") || "").trim() === t);
-
-      // Try case-insensitive contains
-      if (!el) {
-        const low = t.toLowerCase();
-        el = candidates.find(e => (e.textContent || "").trim().toLowerCase() === low) ||
-             candidates.find(e => (e.textContent || "").trim().toLowerCase().includes(low));
-      }
-
-      if (el && typeof el.click === "function") {
-        el.click();
-        return true;
-      }
-      return false;
-    }, wanted);
-
-    return clicked;
-  }
-
   try {
-    // Wait for navigation/JS rendering to calm down a bit (optional)
-    if (page.waitForNetworkIdle) {
-      await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }).catch(() => {});
-    }
+    // Pastikan UI sudah stabil
+    await page.waitForTimeout(800);
 
-    // Find correct context (page or iframe) containing birthday input
-    const { ctx } = await getContextWithSelector(BIRTHDAY_INPUT);
+    // ===============================
+    // 1. Tunggu & klik birthday input (open picker)
+    // ===============================
+    await page.waitForSelector(BIRTHDAY_INPUT, {
+      visible: true,
+      timeout: CONFIG.TIMING.SELECTOR_TIMEOUT
+    });
 
-    // Wait interactable birthday input
-    await waitInteractable(ctx, BIRTHDAY_INPUT);
+    await page.evaluate((sel) => {
+      document.querySelector(sel)?.scrollIntoView({ block: 'center' });
+    }, BIRTHDAY_INPUT);
 
-    // Scroll + focus
-    try {
-      if (ctx.$eval) {
-        await ctx.$eval(BIRTHDAY_INPUT, (el) => el.scrollIntoView({ block: "center" }));
-      } else {
-        await ctx.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "center" }), BIRTHDAY_INPUT);
-      }
-    } catch (_) {}
+    await page.click(BIRTHDAY_INPUT, { delay: 100 });
 
-    // Clear existing value (best-effort)
-    try {
-      await ctx.click(BIRTHDAY_INPUT, { clickCount: 3 });
-      await ctx.keyboard.press("Backspace");
-    } catch (_) {}
+    // ===============================
+    // 2. Pilih TAHUN (langsung dari popup)
+    // ===============================
+    await page.waitForSelector(DROPDOWN_ITEMS, { visible: true });
 
-    // Try typing year into input
-    let yearFilled = false;
-    try {
-      await ctx.type(BIRTHDAY_INPUT, String(birthday.year), { delay: typingDelay });
-      yearFilled = true;
-    } catch (_) {}
+    await page.evaluate((year) => {
+      const items = [...document.querySelectorAll('.lv-select-popup li')];
+      const target = items.find(el => el.textContent.trim() === String(year));
+      if (!target) throw new Error('Year option not found');
+      target.click();
+    }, birthday.year);
 
-    // Fallback: set value via DOM if typing failed
-    if (!yearFilled) {
-      await ctx.evaluate((sel, val) => {
-        const el = document.querySelector(sel);
-        if (!el) return;
-        el.value = val;
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-      }, BIRTHDAY_INPUT, String(birthday.year));
-    }
+    await page.waitForTimeout(CONFIG.TIMING.PAGE_WAIT);
 
-    // Month selection
-    if (BIRTHDAY_MONTH_SELECTOR) {
-      await waitInteractable(ctx, BIRTHDAY_MONTH_SELECTOR);
-      await scrollAndClick(ctx, BIRTHDAY_MONTH_SELECTOR);
-      await sleep(CONFIG.TIMING.PAGE_WAIT ?? 300);
+    // ===============================
+    // 3. Pilih BULAN
+    // ===============================
+    await page.click(BIRTHDAY_MONTH_SELECTOR, { delay: 80 });
+    await page.waitForSelector(DROPDOWN_ITEMS, { visible: true });
 
-      // Try click by text
-      const monthClicked = await clickItemByText(ctx, birthday.month);
-      if (!monthClicked) {
-        // fallback: try typing month into an active input if any
-        try {
-          await ctx.keyboard.type(String(birthday.month), { delay: typingDelay });
-          await ctx.keyboard.press("Enter");
-        } catch (_) {}
-      }
-    }
+    await page.evaluate((month) => {
+      const items = [...document.querySelectorAll('.lv-select-popup li')];
+      const target = items.find(el =>
+        el.textContent.trim().toLowerCase() === month.toLowerCase()
+      );
+      if (!target) throw new Error('Month option not found');
+      target.click();
+    }, birthday.month);
 
-    // Day selection
-    if (BIRTHDAY_DAY_SELECTOR) {
-      await waitInteractable(ctx, BIRTHDAY_DAY_SELECTOR);
-      await scrollAndClick(ctx, BIRTHDAY_DAY_SELECTOR);
-      await sleep(CONFIG.TIMING.PAGE_WAIT ?? 300);
+    await page.waitForTimeout(CONFIG.TIMING.PAGE_WAIT);
 
-      const dayClicked = await clickItemByText(ctx, birthday.day);
-      if (!dayClicked) {
-        try {
-          await ctx.keyboard.type(String(birthday.day), { delay: typingDelay });
-          await ctx.keyboard.press("Enter");
-        } catch (_) {}
-      }
-    }
+    // ===============================
+    // 4. Pilih HARI
+    // ===============================
+    await page.click(BIRTHDAY_DAY_SELECTOR, { delay: 80 });
+    await page.waitForSelector(DROPDOWN_ITEMS, { visible: true });
 
-    console.log(chalk.green(`📆 Tanggal lahir dipilih: ${birthday.day} ${birthday.month} ${birthday.year}`));
+    await page.evaluate((day) => {
+      const items = [...document.querySelectorAll('.lv-select-popup li')];
+      const target = items.find(el => el.textContent.trim() === String(day));
+      if (!target) throw new Error('Day option not found');
+      target.click();
+    }, birthday.day);
 
-    // Click next button
-    const nextCtxInfo = await getContextWithSelector(BIRTHDAY_NEXT_BUTTON);
-    await waitInteractable(nextCtxInfo.ctx, BIRTHDAY_NEXT_BUTTON);
-    await scrollAndClick(nextCtxInfo.ctx, BIRTHDAY_NEXT_BUTTON);
+    console.log(
+      `📆 Birthday dipilih: ${birthday.day} ${birthday.month} ${birthday.year}`
+    );
+
+    // ===============================
+    // 5. Klik tombol Next
+    // ===============================
+    await page.waitForSelector(BIRTHDAY_NEXT_BUTTON, { visible: true });
+    await page.click(BIRTHDAY_NEXT_BUTTON, { delay: 100 });
 
     return birthday;
+
   } catch (error) {
-    console.error(chalk.red("Gagal mengisi tanggal lahir!"), error.message);
+    console.error('❌ Gagal mengisi birthday:', error.message);
     throw error;
   }
 }
