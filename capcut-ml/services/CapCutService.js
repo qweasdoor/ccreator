@@ -1,10 +1,10 @@
 /**
- * CapCutService.js - Robust version
+ * services/CapCutService.js - Sinkronisasi Alur Indonesia
  */
 import { CONFIG } from '../config/config.js';
-import { BrowserService } from './BrowserService.js';
-import { sleep } from '../utils/helpers.js'; // Pastikan helpers diimport
-import chalk from 'chalk';
+import { BrowserService } from '../core/BrowserService.js';
+import { generateRandomBirthday, sleep } from '../utils/helpers.js';
+// ... (imports lainnya)
 
 export class CapCutService {
   
@@ -20,56 +20,57 @@ export class CapCutService {
  * Fill in password on signup page
  */
 static async fillPassword(page, password) {
-  try {
-    const { PASSWORD_INPUT, SIGNUP_BUTTON } = CONFIG.CAPCUT.SELECTORS;
-    
-    // Tunggu transisi ke Gambar 2
-    await page.waitForSelector(PASSWORD_INPUT, { visible: true, timeout: 15000 });
-    await BrowserService.typeIntoField(page, PASSWORD_INPUT, password);
-    
-    // Klik tombol Daftar (berdasarkan class di config)
-    await page.waitForSelector(SIGNUP_BUTTON, { visible: true });
-    await page.click(SIGNUP_BUTTON);
-    
-  } catch (error) {
-    throw new Error(`Gagal mengisi password: ${error.message}`);
+    try {
+      const { PASSWORD_INPUT, SIGNUP_BUTTON } = CONFIG.CAPCUT.SELECTORS;
+      
+      // Tunggu hingga Gambar 2 muncul
+      await page.waitForSelector(PASSWORD_INPUT, { visible: true });
+      await BrowserService.typeIntoField(page, PASSWORD_INPUT, password);
+      
+      // KLIK DAFTAR: Gunakan class dari config, bukan button[type="submit"]
+      await BrowserService.clickElement(page, SIGNUP_BUTTON);
+      console.log(chalk.green('✅ Berhasil menekan tombol Daftar!'));
+      
+    } catch (error) {
+      console.error(chalk.red('Gagal mengisi password!'));
+      throw error;
+    }
   }
-}
   
   /**
    * Fill in birthday information (Optimized for UI provided)
    */
- static async fillBirthday(page) {
-  const { BIRTHDAY_INPUT, BIRTHDAY_MONTH_SELECTOR, BIRTHDAY_DAY_SELECTOR, BIRTHDAY_NEXT_BUTTON } = CONFIG.CAPCUT.SELECTORS;
-  const birthday = generateRandomBirthday(); // Mengambil data dari helpers.js
+static async fillBirthday(page) {
+    const { BIRTHDAY_INPUT, BIRTHDAY_MONTH_SELECTOR, BIRTHDAY_DAY_SELECTOR, BIRTHDAY_NEXT_BUTTON } = CONFIG.CAPCUT.SELECTORS;
+    const birthday = generateRandomBirthday();
 
-  try {
-    // Tunggu Gambar 3 muncul
-    await page.waitForSelector(BIRTHDAY_INPUT, { visible: true });
-    
-    // 1. Tahun (Input Teks)
-    await page.type(BIRTHDAY_INPUT, String(birthday.year), { delay: 100 });
+    try {
+      // Tunggu Gambar 3 muncul
+      await page.waitForSelector(BIRTHDAY_INPUT, { visible: true });
 
-    // 2. Bulan (Dropdown)
-    await page.click(BIRTHDAY_MONTH_SELECTOR);
-    await sleep(1000); // Tunggu daftar muncul
-    await this.clickItemByText(page, birthday.month);
+      // 1. Tahun
+      await page.type(BIRTHDAY_INPUT, String(birthday.year), { delay: 100 });
+      await sleep(500);
 
-    // 3. Hari (Dropdown)
-    await page.click(BIRTHDAY_DAY_SELECTOR);
-    await sleep(1000);
-    await this.clickItemByText(page, birthday.day);
+      // 2. Bulan (Dropdown 1)
+      await BrowserService.clickElement(page, BIRTHDAY_MONTH_SELECTOR);
+      await sleep(1000);
+      await BrowserService.selectDropdownItem(page, birthday.month);
 
-    // 4. Klik Berikutnya
-    await page.waitForSelector(BIRTHDAY_NEXT_BUTTON, { visible: true });
-    await page.click(BIRTHDAY_NEXT_BUTTON);
-    
-    return birthday;
-  } catch (error) {
-    throw new Error(`Gagal di tahap Birthday: ${error.message}`);
+      // 3. Hari (Dropdown 2)
+      await BrowserService.clickElement(page, BIRTHDAY_DAY_SELECTOR);
+      await sleep(1000);
+      await BrowserService.selectDropdownItem(page, birthday.day);
+
+      // 4. Klik Berikutnya
+      await BrowserService.clickElement(page, BIRTHDAY_NEXT_BUTTON);
+      
+      return birthday;
+    } catch (error) {
+      throw new Error(`Gagal di tahap Birthday: ${error.message}`);
+    }
   }
-}
-
+  
   /**
    * Helper: Mencari dan mengeklik item di dalam dropdown berdasarkan teks
    */
@@ -138,5 +139,6 @@ static async fillPassword(page, password) {
   }
 
 }
+
 
 
