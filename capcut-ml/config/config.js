@@ -19,26 +19,26 @@ export const CONFIG = {
 // CapCut Website Configuration
   // config.js
 CAPCUT: {
-  SIGNUP_URL: 'https://www.capcut.com/id-id/signup',
-  SELECTORS: {
-    // Gambar 1
-    EMAIL_INPUT: 'input[name="signUsername"]',
-    CONTINUE_BUTTON: '.lv_sign_in_panel_wide-primary-button', 
-    
-    // Gambar 2 - Perbaikan di sini
-    PASSWORD_INPUT: 'input[type="password"]',
-    SIGNUP_BUTTON: '.lv_sign_in_panel_wide-sign-in-button', // Menggunakan class tombol "Daftar"
-    
-    // Gambar 3
-    BIRTHDAY_INPUT: 'input[placeholder="Tahun"]',
-    BIRTHDAY_MONTH_SELECTOR: '.gate_birthday-picker-selector:nth-of-type(1)',
-    BIRTHDAY_DAY_SELECTOR: '.gate_birthday-picker-selector:nth-of-type(2)',
-    BIRTHDAY_NEXT_BUTTON: '.lv_sign_in_panel_wide-birthday-next',
-    
-    OTP_INPUT: 'input.lv-input',
-    DROPDOWN_ITEMS: '.lv-select-popup li'
-  }
-}
+    SIGNUP_URL: 'https://www.capcut.com/id-id/signup',
+    SELECTORS: {
+      // Gambar 1: Masukkan Email
+      EMAIL_INPUT: 'input[name="signUsername"]',
+      CONTINUE_BUTTON: '.lv_sign_in_panel_wide-primary-button', // Tombol "Lanjutkan"
+      
+      // Gambar 2: Masukkan Password (Titik kegagalan sebelumnya)
+      PASSWORD_INPUT: 'input[type="password"]',
+      SIGNUP_BUTTON: '.lv_sign_in_panel_wide-sign-in-button', // Tombol "Daftar" (Bukan type="submit")
+      
+      // Gambar 3: Birthday
+      BIRTHDAY_INPUT: 'input[placeholder="Tahun"]',
+      BIRTHDAY_MONTH_SELECTOR: '.gate_birthday-picker-selector:nth-of-type(1)', 
+      BIRTHDAY_DAY_SELECTOR: '.gate_birthday-picker-selector:nth-of-type(2)',
+      BIRTHDAY_NEXT_BUTTON: '.lv_sign_in_panel_wide-birthday-next',
+      
+      OTP_INPUT: 'input.lv-input',
+      DROPDOWN_ITEMS: 'li[role="option"], .lv-select-popup li'
+    }
+  },
 
   // Browser Configuration
   BROWSER: {
@@ -55,12 +55,12 @@ CAPCUT: {
   TIMING: {
     TYPING_DELAY: 100,
     NAVIGATION_TIMEOUT: 60000,
-    SELECTOR_TIMEOUT: 10000,
+    SELECTOR_TIMEOUT: 20000,
     OTP_CHECK_INTERVAL: 5000,
     OTP_MAX_ATTEMPTS: 10,
     ACCOUNT_CREATION_DELAY_MIN: 3000,
     ACCOUNT_CREATION_DELAY_MAX: 10000,
-    PAGE_WAIT: 500,
+    PAGE_WAIT: 1000,
     FINAL_WAIT: 3000
   },
 
@@ -68,20 +68,12 @@ CAPCUT: {
   // PENTING: Nama bulan diubah kembali ke Bahasa Indonesia sesuai Gambar 3
   BIRTHDAY: {
     MIN_YEAR: 1990,
-    MAX_YEAR: 2003,
+    MAX_YEAR: 2005,
     MONTHS: [
-      { name: "Januari", days: 31 },
-      { name: "Februari", days: 28 },
-      { name: "Maret", days: 31 },
-      { name: "April", days: 30 },
-      { name: "Mei", days: 31 },
-      { name: "Juni", days: 30 },
-      { name: "Juli", days: 31 },
-      { name: "Agustus", days: 31 },
-      { name: "September", days: 30 },
-      { name: "Oktober", days: 31 },
-      { name: "November", days: 30 },
-      { name: "Desember", days: 31 }
+      { name: "Januari", days: 31 }, { name: "Februari", days: 28 }, { name: "Maret", days: 31 },
+      { name: "April", days: 30 }, { name: "Mei", days: 31 }, { name: "Juni", days: 30 },
+      { name: "Juli", days: 31 }, { name: "Agustus", days: 31 }, { name: "September", days: 30 },
+      { name: "Oktober", days: 31 }, { name: "November", days: 30 }, { name: "Desember", days: 31 }
     ]
   },
 
@@ -93,4 +85,5 @@ CAPCUT: {
   }
 
 };
+
 
