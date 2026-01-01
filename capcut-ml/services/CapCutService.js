@@ -28,19 +28,26 @@ export class CapCutService {
   }
 
   /**
-   * Fill in password on signup page
-   */
-  static async fillPassword(page, password) {
-    try {
-      const { PASSWORD_INPUT, SIGNUP_BUTTON } = CONFIG.CAPCUT.SELECTORS;
-      await BrowserService.typeIntoField(page, PASSWORD_INPUT, password);
-      await BrowserService.clickElement(page, SIGNUP_BUTTON);
-    } catch (error) {
-      console.error(chalk.red('Gagal mengisi password!'));
-      throw error;
-    }
+ * Fill in password on signup page
+ */
+static async fillPassword(page, password) {
+  try {
+    const { PASSWORD_INPUT, SIGNUP_BUTTON } = CONFIG.CAPCUT.SELECTORS;
+    
+    // Tunggu input password muncul
+    await page.waitForSelector(PASSWORD_INPUT, { visible: true });
+    await BrowserService.typeIntoField(page, PASSWORD_INPUT, password);
+    
+    // Tunggu tombol "Daftar" (SIGNUP_BUTTON) muncul dan klik
+    await page.waitForSelector(SIGNUP_BUTTON, { visible: true });
+    await page.click(SIGNUP_BUTTON);
+    
+  } catch (error) {
+    console.error(chalk.red('Gagal mengisi password! Detail: ' + error.message));
+    throw error;
   }
-
+}
+  
   /**
    * Fill in birthday information (Optimized for UI provided)
    */
@@ -171,4 +178,5 @@ export class CapCutService {
       return null;
     }
   }
+
 }
